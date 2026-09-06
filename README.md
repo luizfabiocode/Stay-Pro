@@ -4,7 +4,10 @@
 
 ![Status](https://img.shields.io/badge/status-production-green)
 ![Security](https://img.shields.io/badge/security-OWASP%20Top%2010-brightgreen)
+![LGPD](https://img.shields.io/badge/LGPD-compliant-blue)
+![License](https://img.shields.io/badge/license-MIT-orange)
 
+Sistema completo para gestão de locações por temporada...
 ---
 
 Sistema completo para gestão de locações por temporada com multi-imóvel, controle de equipe, relatórios financeiros, logs de auditoria e conformidade com LGPD.
