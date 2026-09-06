@@ -20,6 +20,7 @@ import {
   signJWT,
   verifyJWT,
 } from './server/security';
+import { sendAppEmail } from './server/email';
 
 const PORT = 3000;
 const ACCESS_TOKEN_EXPIRATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -1322,6 +1323,22 @@ async function startServer() {
     saveDB(db);
 
     logAudit(db, user, 'SOLICITAR_RECUPERACAO_SENHA', 'Solicitação de link de redefinição de senha', req, 'Médio');
+
+    // Dispara e-mail real via SMTP (se configurado)
+    sendAppEmail({
+      to: cleanEmail,
+      subject: 'Recuperação de Senha - Stay Pro',
+      text: `Olá ${user.nome || ''},\n\nRecebemos uma solicitação de redefinição de senha para sua conta no Stay Pro.\nSeu token de recuperação é: ${resetToken}\nEste token expira em 60 minutos.\n\nSe você não solicitou, ignore esta mensagem.`,
+      html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #0f172a;">Recuperação de Senha - Stay Pro</h2>
+        <p>Olá <strong>${user.nome || ''}</strong>,</p>
+        <p>Recebemos uma solicitação de redefinição de senha para sua conta.</p>
+        <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 6px; font-family: monospace; font-size: 16px; font-weight: bold; text-align: center; margin: 20px 0;">
+          ${resetToken}
+        </div>
+        <p style="color: #64748b; font-size: 14px;">Este token expira em 60 minutos. Se você não solicitou esta redefinição, nenhuma ação é necessária.</p>
+      </div>`,
+    }).catch((err) => console.error('[EMAIL ERROR] Falha no disparo assíncrono:', err));
 
     return res.json({
       message: 'Link de recuperação gerado com sucesso!',
