@@ -17,13 +17,13 @@
       "emailVerified": true,
       "status": "active",
       "twoFactor": {
-        "enabled": false,
-        "verified": false
+        "verified": false,
+        "enabled": false
       },
       "lgpdConsent": {
-        "accepted": true,
+        "acceptedAt": "2026-08-01T10:00:00.000Z",
         "version": "1.0",
-        "acceptedAt": "2026-08-01T10:00:00.000Z"
+        "accepted": true
       },
       "createdAt": "2026-08-01T10:00:00.000Z",
       "updatedAt": "2026-08-30T10:00:00.000Z"
@@ -49,9 +49,9 @@
         "verified": false
       },
       "lgpdConsent": {
-        "version": "1.0",
         "acceptedAt": "2026-08-10T14:30:00.000Z",
-        "accepted": true
+        "accepted": true,
+        "version": "1.0"
       },
       "createdAt": "2026-08-10T14:30:00.000Z",
       "updatedAt": "2026-08-30T10:00:00.000Z"
@@ -73,13 +73,13 @@
       "emailVerified": false,
       "status": "active",
       "twoFactor": {
-        "enabled": false,
-        "verified": false
+        "verified": false,
+        "enabled": false
       },
       "lgpdConsent": {
-        "acceptedAt": "2026-09-06T10:33:55.617Z",
         "accepted": true,
-        "version": "1.0"
+        "version": "1.0",
+        "acceptedAt": "2026-09-06T10:33:55.617Z"
       },
       "createdAt": "2026-09-06T10:33:55.617Z",
       "updatedAt": "2026-09-06T10:33:55.617Z"
@@ -309,6 +309,32 @@
   ],
   "logs": [
     {
+      "id": "log_1788726592699_nidgl",
+      "usuarioId": "user_1788690835517",
+      "usuarioNome": "Fabio Camargo",
+      "usuarioEmail": "luizfabiocamargo@gmail.com",
+      "acao": "LOGIN",
+      "detalhes": "Login efetuado com sucesso (Perfil: admin, 2FA: Inativo)",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "sessionId": "anonymous",
+      "risco": "Baixo",
+      "timestamp": "2026-09-06T20:29:52.699Z"
+    },
+    {
+      "id": "log_1788726552673_d7hou",
+      "usuarioId": "user_1788690835517",
+      "usuarioNome": "Fabio Camargo",
+      "usuarioEmail": "luizfabiocamargo@gmail.com",
+      "acao": "LOGIN",
+      "detalhes": "Login efetuado com sucesso (Perfil: admin, 2FA: Inativo)",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "sessionId": "anonymous",
+      "risco": "Baixo",
+      "timestamp": "2026-09-06T20:29:12.673Z"
+    },
+    {
       "id": "log_1788708522949_sgmh5",
       "usuarioId": "user_1788690835517",
       "usuarioNome": "Fabio Camargo",
@@ -455,6 +481,28 @@
       "usado": false,
       "revoked": false,
       "createdAt": "2026-09-06T15:28:42.948Z"
+    },
+    {
+      "id": "tok_ref_1788726552672",
+      "usuarioId": "user_1788690835517",
+      "sessionId": "sess_1788726552671_710e39ce",
+      "token": "srt_1788726552672_6d2409b8f056e45c0f9a00a9af42c2b846b9be3611794ed4",
+      "tipo": "refresh",
+      "expiracao": "2026-09-13T20:29:12.672Z",
+      "usado": false,
+      "revoked": false,
+      "createdAt": "2026-09-06T20:29:12.672Z"
+    },
+    {
+      "id": "tok_ref_1788726592697",
+      "usuarioId": "user_1788690835517",
+      "sessionId": "sess_1788726592697_a559898c",
+      "token": "srt_1788726592697_42c6334b6b7a496612ba2e162dea2ed4ac5486c37ded7be3",
+      "tipo": "refresh",
+      "expiracao": "2026-09-13T20:29:52.697Z",
+      "usado": false,
+      "revoked": false,
+      "createdAt": "2026-09-06T20:29:52.697Z"
     }
   ],
   "securityAlerts": [

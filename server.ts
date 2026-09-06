@@ -1020,6 +1020,10 @@ async function startServer() {
       const cleanEmail = sanitizeInput(email).toLowerCase().trim();
       const ip = req.ip || req.headers['x-forwarded-for']?.toString() || '127.0.0.1';
 
+      const fbConfig = loadFirebaseConfig();
+      const activeDbId = fbConfig?.firestoreDatabaseId || DEFAULT_FIRESTORE_DATABASE_ID;
+      console.log(`[Stay Pro Auth] Processando login para "${cleanEmail}" | Banco Firestore Ativo: "${activeDbId}" (Projeto: "${fbConfig?.projectId}")`);
+
       if (!cleanEmail || !cleanEmail.includes('@')) {
         return res.status(400).json({ error: 'Formato de e-mail inválido.' });
       }

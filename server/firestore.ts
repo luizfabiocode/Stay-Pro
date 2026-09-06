@@ -17,6 +17,17 @@ export const DEFAULT_FIRESTORE_DATABASE_ID = 'ai-studio-staypro-8b62f2bf-79f5-4d
 let firestoreInstance: Firestore | null = null;
 let firebaseConfig: any = null;
 
+function resolveDatabaseId(envDbId?: string, configDbId?: string): string {
+  // Se o env for o valor corrompido 'defalt' ou 'default', prioriza o banco canônico Stay Pro
+  const candidates = [configDbId, envDbId, DEFAULT_FIRESTORE_DATABASE_ID];
+  for (const candidate of candidates) {
+    if (candidate && candidate !== 'defalt' && candidate !== 'default' && candidate !== '(default)') {
+      return candidate;
+    }
+  }
+  return DEFAULT_FIRESTORE_DATABASE_ID;
+}
+
 export function loadFirebaseConfig() {
   if (firebaseConfig) return firebaseConfig;
   const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
@@ -29,14 +40,15 @@ export function loadFirebaseConfig() {
     }
   }
 
+  const resolvedDbId = resolveDatabaseId(process.env.FIRESTORE_DATABASE_ID, firebaseConfig?.firestoreDatabaseId);
+
   if (!firebaseConfig) {
     firebaseConfig = {
       projectId: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'project-6d7775f6-2fcd-4966-b77',
-      firestoreDatabaseId: process.env.FIRESTORE_DATABASE_ID || DEFAULT_FIRESTORE_DATABASE_ID,
+      firestoreDatabaseId: resolvedDbId,
     };
   } else {
-    firebaseConfig.firestoreDatabaseId =
-      process.env.FIRESTORE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || DEFAULT_FIRESTORE_DATABASE_ID;
+    firebaseConfig.firestoreDatabaseId = resolvedDbId;
   }
 
   return firebaseConfig;
@@ -47,7 +59,7 @@ export function getFirestoreDB(): Firestore | null {
 
   const config = loadFirebaseConfig();
   const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || config?.projectId;
-  const databaseId = process.env.FIRESTORE_DATABASE_ID || config?.firestoreDatabaseId || DEFAULT_FIRESTORE_DATABASE_ID;
+  const databaseId = resolveDatabaseId(process.env.FIRESTORE_DATABASE_ID, config?.firestoreDatabaseId);
 
   if (!projectId) {
     console.warn('[Firebase Firestore] Project ID não configurado');
