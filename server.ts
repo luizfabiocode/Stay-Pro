@@ -456,38 +456,37 @@ function saveDB(data: DBData) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('[Stay Pro DB] Erro ao gravar dados no arquivo local:', err);
+    console.error('[Stay Pro DB] Erro ao gravar cache local:', err);
   }
 
-  // Sincronização assíncrona com o Google Cloud Firestore
+  // Sincronização direta com o Google Cloud Firestore
   try {
     const dbFirestore = getFirestoreDB();
     if (dbFirestore) {
       if (Array.isArray(data.users) && data.users.length > 0) {
         syncBatchToFirestore('users', data.users).catch((err) =>
-          console.warn('[Firestore] Sync users warning:', err?.message || err)
+          console.error('[Firestore Error] Erro ao salvar users no Firestore:', err?.message || err)
         );
       }
       if (Array.isArray(data.propriedades) && data.propriedades.length > 0) {
         syncBatchToFirestore('propriedades', data.propriedades).catch((err) =>
-          console.warn('[Firestore] Sync propriedades warning:', err?.message || err)
+          console.error('[Firestore Error] Erro ao salvar propriedades no Firestore:', err?.message || err)
         );
       }
       if (Array.isArray(data.reservas) && data.reservas.length > 0) {
         syncBatchToFirestore('reservas', data.reservas).catch((err) =>
-          console.warn('[Firestore] Sync reservas warning:', err?.message || err)
+          console.error('[Firestore Error] Erro ao salvar reservas no Firestore:', err?.message || err)
         );
       }
       if (Array.isArray(data.logs) && data.logs.length > 0) {
-        // Envia os 50 logs mais recentes para não exceder limites de batch
         const recentLogs = data.logs.slice(-50);
         syncBatchToFirestore('logs', recentLogs).catch((err) =>
-          console.warn('[Firestore] Sync logs warning:', err?.message || err)
+          console.error('[Firestore Error] Erro ao salvar logs no Firestore:', err?.message || err)
         );
       }
     }
   } catch (err) {
-    console.warn('[Firestore Sync] Erro no agendamento de sincronização:', err);
+    console.error('[Firestore Error] Falha geral ao despachar gravação para Firestore:', err);
   }
 }
 
@@ -524,6 +523,11 @@ function logAudit(
   if (db.logs.length > 1000) {
     db.logs = db.logs.slice(0, 1000);
   }
+
+  // Grava log individual no Firestore imediatamente
+  saveDocumentToFirestore('logs', newLog.id, newLog).catch((err) => {
+    console.warn('[Firestore] Falha ao persistir log individual:', err?.message || err);
+  });
 
   // Se risco for Médio ou Alto, cria alerta na central de segurança
   if (risco === 'Alto' || risco === 'Médio') {
@@ -968,6 +972,9 @@ async function startServer() {
 
       db.propriedades.push(newProperty);
       db.users.push(newUser);
+
+      await saveDocumentToFirestore('users', userId, newUser);
+      await saveDocumentToFirestore('propriedades', propertyId, newProperty);
 
       logAudit(
         db,
@@ -1611,7 +1618,7 @@ async function startServer() {
     res.json(properties);
   });
 
-  app.post('/api/propriedades', requireAuth, (req, res) => {
+  app.post('/api/propriedades', requireAuth, async (req, res) => {
     const user = (req as any).user;
     const db = (req as any).db as DBData;
 
@@ -1671,6 +1678,8 @@ async function startServer() {
       req
     );
 
+    await saveDocumentToFirestore('propriedades', newProperty.id, newProperty);
+    await saveDocumentToFirestore('users', user.id, user);
     saveDB(db);
 
     const userProps = getUserProperties(user, db);
@@ -1696,7 +1705,7 @@ async function startServer() {
     res.json(property);
   });
 
-  app.put('/api/propriedade', requireAuth, (req, res) => {
+  app.put('/api/propriedade', requireAuth, async (req, res) => {
     const user = (req as any).user;
     const db = (req as any).db as DBData;
     const targetProperty = resolveActiveProperty(req, user, db);
@@ -1740,6 +1749,7 @@ async function startServer() {
       updatedAt: new Date().toISOString(),
     };
 
+    await saveDocumentToFirestore('propriedades', db.propriedades[index].id, db.propriedades[index]);
     logAudit(db, user, 'ATUALIZAR_CONFIGURACOES', `Configurações do imóvel atualizadas ("${db.propriedades[index].nome}")`, req);
     saveDB(db);
 
@@ -1747,9 +1757,9 @@ async function startServer() {
   });
 
   // ----------------------------------------------------
-  // RESERVATIONS ROUTE: LIST (Filtered strictly by active property)
+  // RESERVATIONS ROUTE: LIST (Filtered strictly by active property, loaded from Firestore)
   // ----------------------------------------------------
-  app.get('/api/reservas', requireAuth, (req, res) => {
+  app.get('/api/reservas', requireAuth, async (req, res) => {
     const user = (req as any).user;
     const db = (req as any).db as DBData;
     const activeProperty = resolveActiveProperty(req, user, db);
@@ -1762,6 +1772,16 @@ async function startServer() {
         totalPages: 1,
         limit: 10,
       });
+    }
+
+    // Carrega a coleção de reservas diretamente do Firestore para obter dados em tempo real
+    try {
+      const cloudReservas = await loadCollectionFromFirestore('reservas');
+      if (Array.isArray(cloudReservas) && cloudReservas.length > 0) {
+        db.reservas = cloudReservas;
+      }
+    } catch (err: any) {
+      console.warn('[Firestore] Falha na leitura dinâmica de reservas, usando cache local:', err?.message || err);
     }
 
     let items = db.reservas.filter((r) => r.propriedadeId === activeProperty.id);
@@ -1819,7 +1839,7 @@ async function startServer() {
   // ----------------------------------------------------
   // RESERVATIONS ROUTE: CREATE (Checks Date Collisions & Isolation)
   // ----------------------------------------------------
-  app.post('/api/reservas', requireAuth, (req, res) => {
+  app.post('/api/reservas', requireAuth, async (req, res) => {
     const user = (req as any).user;
     const db = (req as any).db as DBData;
     const targetPropId = req.body.propriedadeId || resolveActiveProperty(req, user, db)?.id;
@@ -1956,6 +1976,13 @@ async function startServer() {
     db.reservas.push(newReservation);
     user.reservasMes = (user.reservasMes || 0) + 1;
 
+    const firestoreOk = await saveDocumentToFirestore('reservas', newReservation.id, newReservation);
+    if (!firestoreOk) {
+      console.error('[Firestore Error] Falha ao gravar reserva diretamente no Firestore:', newReservation.id);
+    } else {
+      console.log(`[Firestore Success] Reserva ${newReservation.codigo} (${newReservation.id}) gravada diretamente no Firestore.`);
+    }
+
     logAudit(
       db,
       user,
@@ -1978,7 +2005,7 @@ async function startServer() {
   // ----------------------------------------------------
   // RESERVATIONS ROUTE: BLOCK DATES ("Novo Bloqueio")
   // ----------------------------------------------------
-  app.post('/api/reservas/bloqueio', requireAuth, (req, res) => {
+  app.post('/api/reservas/bloqueio', requireAuth, async (req, res) => {
     const user = (req as any).user;
     const db = (req as any).db as DBData;
     const targetPropId = req.body.propriedadeId || resolveActiveProperty(req, user, db)?.id;
@@ -2036,6 +2063,13 @@ async function startServer() {
     };
 
     db.reservas.push(blockRes);
+    const firestoreOk = await saveDocumentToFirestore('reservas', blockRes.id, blockRes);
+    if (!firestoreOk) {
+      console.error('[Firestore Error] Falha ao gravar bloqueio diretamente no Firestore:', blockRes.id);
+    } else {
+      console.log(`[Firestore Success] Bloqueio ${blockRes.codigo} (${blockRes.id}) gravado diretamente no Firestore.`);
+    }
+
     logAudit(
       db,
       user,
@@ -2051,7 +2085,7 @@ async function startServer() {
   // ----------------------------------------------------
   // RESERVATIONS ROUTE: UPDATE (Edit, Status changes)
   // ----------------------------------------------------
-  app.put('/api/reservas/:id', requireAuth, (req, res) => {
+  app.put('/api/reservas/:id', requireAuth, async (req, res) => {
     const user = (req as any).user;
     const db = (req as any).db as DBData;
     const { id } = req.params;
@@ -2205,6 +2239,13 @@ async function startServer() {
       );
     }
 
+    const firestoreUpdateOk = await saveDocumentToFirestore('reservas', db.reservas[index].id, db.reservas[index]);
+    if (!firestoreUpdateOk) {
+      console.error('[Firestore Error] Falha ao atualizar reserva diretamente no Firestore:', db.reservas[index].id);
+    } else {
+      console.log(`[Firestore Success] Reserva ${db.reservas[index].codigo} (${db.reservas[index].id}) atualizada diretamente no Firestore.`);
+    }
+
     saveDB(db);
 
     res.json({
@@ -2219,7 +2260,7 @@ async function startServer() {
   // ----------------------------------------------------
   // RESERVATIONS ROUTE: DELETE
   // ----------------------------------------------------
-  app.delete('/api/reservas/:id', requireAuth, (req, res) => {
+  app.delete('/api/reservas/:id', requireAuth, async (req, res) => {
     const user = (req as any).user;
     const db = (req as any).db as DBData;
     const { id } = req.params;
@@ -2239,9 +2280,14 @@ async function startServer() {
 
     const index = db.reservas.findIndex((r) => r.id === id);
     const deleted = db.reservas.splice(index, 1)[0];
-    deleteDocumentFromFirestore('reservas', id).catch((err) =>
-      console.warn('[Firestore] Falha ao deletar reserva do Firestore:', err?.message || err)
-    );
+    
+    const firestoreDeleteOk = await deleteDocumentFromFirestore('reservas', id);
+    if (!firestoreDeleteOk) {
+      console.error('[Firestore Error] Falha ao excluir reserva diretamente do Firestore:', id);
+    } else {
+      console.log(`[Firestore Success] Reserva ${deleted.codigo} (${id}) excluída diretamente do Firestore.`);
+    }
+
     logAudit(
       db,
       user,
