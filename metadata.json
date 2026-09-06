@@ -1,0 +1,6 @@
+{
+  "name": "Stay Pro",
+  "description": "Sistema completo para gestão profissional de locação por temporada com calendário interativo, controle financeiro, relatórios e controle de acesso.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
