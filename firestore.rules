@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regras abertas para acesso inicial do sistema Stay Pro
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

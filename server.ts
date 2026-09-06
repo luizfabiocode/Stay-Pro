@@ -21,6 +21,14 @@ import {
   verifyJWT,
 } from './server/security';
 import { sendAppEmail } from './server/email';
+import {
+  getFirestoreDB,
+  loadCollectionFromFirestore,
+  saveDocumentToFirestore,
+  deleteDocumentFromFirestore,
+  syncBatchToFirestore,
+  syncInitialDataFromFirestore,
+} from './server/firestore';
 
 const PORT = 3000;
 const ACCESS_TOKEN_EXPIRATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -448,6 +456,37 @@ function saveDB(data: DBData) {
   } catch (err) {
     console.error('[Stay Pro DB] Erro ao gravar dados no arquivo local:', err);
   }
+
+  // Sincronização assíncrona com o Google Cloud Firestore
+  try {
+    const dbFirestore = getFirestoreDB();
+    if (dbFirestore) {
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        syncBatchToFirestore('users', data.users).catch((err) =>
+          console.warn('[Firestore] Sync users warning:', err?.message || err)
+        );
+      }
+      if (Array.isArray(data.propriedades) && data.propriedades.length > 0) {
+        syncBatchToFirestore('propriedades', data.propriedades).catch((err) =>
+          console.warn('[Firestore] Sync propriedades warning:', err?.message || err)
+        );
+      }
+      if (Array.isArray(data.reservas) && data.reservas.length > 0) {
+        syncBatchToFirestore('reservas', data.reservas).catch((err) =>
+          console.warn('[Firestore] Sync reservas warning:', err?.message || err)
+        );
+      }
+      if (Array.isArray(data.logs) && data.logs.length > 0) {
+        // Envia os 50 logs mais recentes para não exceder limites de batch
+        const recentLogs = data.logs.slice(-50);
+        syncBatchToFirestore('logs', recentLogs).catch((err) =>
+          console.warn('[Firestore] Sync logs warning:', err?.message || err)
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[Firestore Sync] Erro no agendamento de sincronização:', err);
+  }
 }
 
 // ----------------------------------------------------
@@ -748,6 +787,13 @@ function applyRateLimit(
 // SERVER INITIALIZATION
 // ----------------------------------------------------
 async function startServer() {
+  // Hidrata dados persistidos do Firestore
+  const initialDb = loadDB();
+  await syncInitialDataFromFirestore(initialDb).catch((err) =>
+    console.warn('[Firestore] Inicialização:', err?.message || err)
+  );
+  saveDB(initialDb);
+
   const app = express();
   app.use(express.json({ limit: '5mb' }));
 
@@ -2101,6 +2147,9 @@ async function startServer() {
 
     const index = db.reservas.findIndex((r) => r.id === id);
     const deleted = db.reservas.splice(index, 1)[0];
+    deleteDocumentFromFirestore('reservas', id).catch((err) =>
+      console.warn('[Firestore] Falha ao deletar reserva do Firestore:', err?.message || err)
+    );
     logAudit(
       db,
       user,
@@ -2484,6 +2533,9 @@ async function startServer() {
     }
 
     const removed = db.users.splice(index, 1)[0];
+    deleteDocumentFromFirestore('users', id).catch((err) =>
+      console.warn('[Firestore] Falha ao deletar usuario do Firestore:', err?.message || err)
+    );
     logAudit(
       db,
       user,
@@ -2837,6 +2889,44 @@ async function startServer() {
       return res.json({ message: 'Teste enviado com sucesso!', success: true });
     }
     return res.status(400).json({ error: 'Falha ao conectar no Webhook. Verifique a URL.', success: false });
+  });
+
+  // ----------------------------------------------------
+  // SYSTEM ROUTE: FIRESTORE STATUS & MANUAL SYNC
+  // ----------------------------------------------------
+  app.post('/api/system/sync-firestore', requireAuth, async (req, res) => {
+    const user = (req as any).user;
+    if (user.role !== 'admin') {
+      return res.status(403).json({ error: 'Apenas administradores podem executar sincronização global.' });
+    }
+
+    const db = (req as any).db as DBData;
+    const dbFirestore = getFirestoreDB();
+    if (!dbFirestore) {
+      return res.status(500).json({ error: 'Firestore não configurado ou inacessível.' });
+    }
+
+    try {
+      const results = {
+        users: await syncBatchToFirestore('users', db.users || []),
+        propriedades: await syncBatchToFirestore('propriedades', db.propriedades || []),
+        reservas: await syncBatchToFirestore('reservas', db.reservas || []),
+        logs: await syncBatchToFirestore('logs', (db.logs || []).slice(-50)),
+      };
+
+      res.json({
+        message: 'Sincronização com Google Cloud Firestore concluída com sucesso!',
+        syncedCounts: {
+          users: db.users?.length || 0,
+          propriedades: db.propriedades?.length || 0,
+          reservas: db.reservas?.length || 0,
+          logs: Math.min(db.logs?.length || 0, 50),
+        },
+        results,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: `Erro na sincronização: ${err.message}` });
+    }
   });
 
   // ----------------------------------------------------

@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@google-cloud/firestore": "^9.0.1",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
@@ -19,6 +20,8 @@
     "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "firebase": "^12.18.0",
+    "firebase-admin": "^14.3.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",

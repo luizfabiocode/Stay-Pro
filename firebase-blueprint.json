@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Stay Pro registered users with credentials, roles, and profiles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "phone": { "type": "string" },
+        "cpf": { "type": "string" },
+        "role": { "type": "string" },
+        "plan": { "type": "string" },
+        "reservasMes": { "type": "number" },
+        "propriedadeId": { "type": "string" },
+        "propriedadesIds": { "type": "array" },
+        "emailVerified": { "type": "boolean" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "email", "name", "role"]
+    },
+    "Propriedade": {
+      "title": "Propriedade",
+      "description": "Short-stay rental properties and houses managed in Stay Pro",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nome": { "type": "string" },
+        "endereco": { "type": "string" },
+        "descricao": { "type": "string" },
+        "telefone": { "type": "string" },
+        "diariaPadrao": { "type": "number" },
+        "taxaLimpeza": { "type": "number" },
+        "periodoMinimo": { "type": "number" },
+        "gapLimpeza": { "type": "number" },
+        "regrasCasa": { "type": "string" },
+        "usuarioId": { "type": "string" },
+        "donoId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "nome", "usuarioId"]
+    },
+    "Reserva": {
+      "title": "Reserva",
+      "description": "Booking and maintenance blockage records for properties",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "codigo": { "type": "string" },
+        "hospede": { "type": "string" },
+        "telefone": { "type": "string" },
+        "email": { "type": "string" },
+        "qtdPessoas": { "type": "number" },
+        "checkIn": { "type": "string" },
+        "checkOut": { "type": "string" },
+        "valorTotal": { "type": "number" },
+        "sinalPago": { "type": "boolean" },
+        "valorSinal": { "type": "number" },
+        "saldoRestante": { "type": "number" },
+        "status": { "type": "string" },
+        "statusFinanceiro": { "type": "string" },
+        "propriedadeId": { "type": "string" },
+        "usuarioId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "codigo", "checkIn", "checkOut", "propriedadeId", "usuarioId"]
+    },
+    "LogAuditoria": {
+      "title": "LogAuditoria",
+      "description": "Immutable security and audit logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "usuarioId": { "type": "string" },
+        "usuarioNome": { "type": "string" },
+        "usuarioEmail": { "type": "string" },
+        "acao": { "type": "string" },
+        "detalhes": { "type": "string" },
+        "ip": { "type": "string" },
+        "userAgent": { "type": "string" },
+        "risco": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "acao", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User accounts and authentication profiles"
+    },
+    "/propriedades/{propriedadeId}": {
+      "schema": "Propriedade",
+      "description": "Registered properties"
+    },
+    "/reservas/{reservaId}": {
+      "schema": "Reserva",
+      "description": "Bookings and blockages"
+    },
+    "/logs/{logId}": {
+      "schema": "LogAuditoria",
+      "description": "Audit and compliance log entries"
+    }
+  }
+}
