@@ -22,8 +22,8 @@
       },
       "lgpdConsent": {
         "accepted": true,
-        "acceptedAt": "2026-08-01T10:00:00.000Z",
-        "version": "1.0"
+        "version": "1.0",
+        "acceptedAt": "2026-08-01T10:00:00.000Z"
       },
       "createdAt": "2026-08-01T10:00:00.000Z",
       "updatedAt": "2026-08-30T10:00:00.000Z"
@@ -49,9 +49,9 @@
         "verified": false
       },
       "lgpdConsent": {
-        "accepted": true,
+        "version": "1.0",
         "acceptedAt": "2026-08-10T14:30:00.000Z",
-        "version": "1.0"
+        "accepted": true
       },
       "createdAt": "2026-08-10T14:30:00.000Z",
       "updatedAt": "2026-08-30T10:00:00.000Z"
@@ -77,9 +77,9 @@
         "verified": false
       },
       "lgpdConsent": {
+        "acceptedAt": "2026-09-06T10:33:55.617Z",
         "accepted": true,
-        "version": "1.0",
-        "acceptedAt": "2026-09-06T10:33:55.617Z"
+        "version": "1.0"
       },
       "createdAt": "2026-09-06T10:33:55.617Z",
       "updatedAt": "2026-09-06T10:33:55.617Z"
@@ -309,6 +309,45 @@
   ],
   "logs": [
     {
+      "id": "log_1788708522949_sgmh5",
+      "usuarioId": "user_1788690835517",
+      "usuarioNome": "Fabio Camargo",
+      "usuarioEmail": "luizfabiocamargo@gmail.com",
+      "acao": "LOGIN",
+      "detalhes": "Login efetuado com sucesso (Perfil: admin, 2FA: Inativo)",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "sessionId": "anonymous",
+      "risco": "Baixo",
+      "timestamp": "2026-09-06T15:28:42.949Z"
+    },
+    {
+      "id": "log_1788708520066_0xfkw",
+      "usuarioId": "user_admin_01",
+      "usuarioNome": "Carlos Silva (Administrador)",
+      "usuarioEmail": "admin@staypro.com.br",
+      "acao": "LOGIN",
+      "detalhes": "Login efetuado com sucesso (Perfil: admin, 2FA: Inativo)",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "sessionId": "anonymous",
+      "risco": "Baixo",
+      "timestamp": "2026-09-06T15:28:40.066Z"
+    },
+    {
+      "id": "log_1788708516487_u6y0g",
+      "usuarioId": "user_admin_01",
+      "usuarioNome": "Carlos Silva (Administrador)",
+      "usuarioEmail": "admin@staypro.com.br",
+      "acao": "LOGIN_FALHA",
+      "detalhes": "Tentativa com senha incorreta (1/5)",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "sessionId": "anonymous",
+      "risco": "Médio",
+      "timestamp": "2026-09-06T15:28:36.487Z"
+    },
+    {
       "id": "log_1788690835618_veh2h",
       "usuarioId": "user_1788690835517",
       "usuarioNome": "Fabio Camargo",
@@ -394,15 +433,54 @@
       "usado": false,
       "revoked": false,
       "createdAt": "2026-09-06T10:33:55.621Z"
+    },
+    {
+      "id": "tok_ref_1788708520065",
+      "usuarioId": "user_admin_01",
+      "sessionId": "sess_1788708520064_2c91736d",
+      "token": "srt_1788708520065_b506720d5dad11a79693046ce17b2c111c98ae943e04ab74",
+      "tipo": "refresh",
+      "expiracao": "2026-09-13T15:28:40.065Z",
+      "usado": false,
+      "revoked": false,
+      "createdAt": "2026-09-06T15:28:40.065Z"
+    },
+    {
+      "id": "tok_ref_1788708522948",
+      "usuarioId": "user_1788690835517",
+      "sessionId": "sess_1788708522948_1983b21f",
+      "token": "srt_1788708522948_9bf20b2a8c9ee0d81e137d026f986cd1862e6b715de69277",
+      "tipo": "refresh",
+      "expiracao": "2026-09-13T15:28:42.948Z",
+      "usado": false,
+      "revoked": false,
+      "createdAt": "2026-09-06T15:28:42.948Z"
     }
   ],
-  "securityAlerts": [],
+  "securityAlerts": [
+    {
+      "id": "alert_1788708516488_zlyh",
+      "tipo": "LOGIN_FALHA",
+      "risco": "Médio",
+      "mensagem": "Tentativa com senha incorreta (1/5)",
+      "usuarioEmail": "admin@staypro.com.br",
+      "ip": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "resolvido": false,
+      "timestamp": "2026-09-06T15:28:36.488Z"
+    }
+  ],
   "backups": [],
   "webhookConfig": {
     "webhookUrl": "http://localhost:3000/webhook",
     "enabled": true,
     "highRiskOnly": true
   },
-  "loginAttempts": {},
+  "loginAttempts": {
+    "127.0.0.1_usuario.inexistente@staypro.com.br": {
+      "count": 1,
+      "lastAttempt": 1788708512831
+    }
+  },
   "captchas": {}
 }

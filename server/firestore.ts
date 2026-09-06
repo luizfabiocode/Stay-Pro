@@ -12,10 +12,12 @@ import {
 import fs from 'fs';
 import path from 'path';
 
+export const DEFAULT_FIRESTORE_DATABASE_ID = 'ai-studio-staypro-8b62f2bf-79f5-4d3c-ad04-6af07de45f4b';
+
 let firestoreInstance: Firestore | null = null;
 let firebaseConfig: any = null;
 
-function loadFirebaseConfig() {
+export function loadFirebaseConfig() {
   if (firebaseConfig) return firebaseConfig;
   const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
   if (fs.existsSync(configPath)) {
@@ -26,6 +28,17 @@ function loadFirebaseConfig() {
       console.error('[Firebase] Erro ao ler firebase-applet-config.json:', e);
     }
   }
+
+  if (!firebaseConfig) {
+    firebaseConfig = {
+      projectId: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'project-6d7775f6-2fcd-4966-b77',
+      firestoreDatabaseId: process.env.FIRESTORE_DATABASE_ID || DEFAULT_FIRESTORE_DATABASE_ID,
+    };
+  } else {
+    firebaseConfig.firestoreDatabaseId =
+      process.env.FIRESTORE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || DEFAULT_FIRESTORE_DATABASE_ID;
+  }
+
   return firebaseConfig;
 }
 
@@ -33,22 +46,25 @@ export function getFirestoreDB(): Firestore | null {
   if (firestoreInstance) return firestoreInstance;
 
   const config = loadFirebaseConfig();
-  if (!config || !config.projectId) {
-    console.warn('[Firebase Firestore] Configuração não encontrada em firebase-applet-config.json');
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || config?.projectId;
+  const databaseId = process.env.FIRESTORE_DATABASE_ID || config?.firestoreDatabaseId || DEFAULT_FIRESTORE_DATABASE_ID;
+
+  if (!projectId) {
+    console.warn('[Firebase Firestore] Project ID não configurado');
     return null;
   }
 
   try {
     const app = getApps().length === 0
       ? initializeApp({
-          apiKey: config.apiKey,
-          projectId: config.projectId,
-          authDomain: config.authDomain,
+          apiKey: config?.apiKey || process.env.FIREBASE_API_KEY || 'AIzaSyB5S-sxmwAHi3fDgrF0oKGsfMlJ2NY1IXU',
+          projectId: projectId,
+          authDomain: config?.authDomain || `${projectId}.firebaseapp.com`,
         })
       : getApp();
 
-    firestoreInstance = getFirestore(app, config.firestoreDatabaseId || undefined);
-    console.log(`[Firebase Firestore] Conectado com sucesso ao projeto "${config.projectId}" (Database: ${config.firestoreDatabaseId || '(default)'})`);
+    firestoreInstance = getFirestore(app, databaseId);
+    console.log(`[Firebase Firestore] Conectado com sucesso ao projeto "${projectId}" (Database: ${databaseId})`);
     return firestoreInstance;
   } catch (error) {
     console.error('[Firebase Firestore] Erro ao inicializar Firestore:', error);

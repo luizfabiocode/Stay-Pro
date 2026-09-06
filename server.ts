@@ -28,6 +28,8 @@ import {
   deleteDocumentFromFirestore,
   syncBatchToFirestore,
   syncInitialDataFromFirestore,
+  loadFirebaseConfig,
+  DEFAULT_FIRESTORE_DATABASE_ID,
 } from './server/firestore';
 
 const PORT = 3000;
@@ -1000,9 +1002,27 @@ async function startServer() {
   // ----------------------------------------------------
   app.post('/api/auth/login', async (req, res) => {
     try {
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ error: 'Dados de requisição inválidos.' });
+      }
+
       const { email, password, captchaId, captchaAnswer, twoFactorCode } = req.body;
-      const cleanEmail = sanitizeInput(email).toLowerCase();
+
+      // 1. Validação de campos obrigatórios de entrada
+      if (!email || typeof email !== 'string' || !email.trim()) {
+        return res.status(400).json({ error: 'O e-mail é obrigatório para realizar o login.' });
+      }
+
+      if (!password || typeof password !== 'string' || !password.trim()) {
+        return res.status(400).json({ error: 'A senha é obrigatória para realizar o login.' });
+      }
+
+      const cleanEmail = sanitizeInput(email).toLowerCase().trim();
       const ip = req.ip || req.headers['x-forwarded-for']?.toString() || '127.0.0.1';
+
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        return res.status(400).json({ error: 'Formato de e-mail inválido.' });
+      }
 
       const db = loadDB();
       if (!db.loginAttempts) db.loginAttempts = {};
@@ -1010,17 +1030,17 @@ async function startServer() {
       const attemptKey = `${ip}_${cleanEmail}`;
       const attemptData = db.loginAttempts[attemptKey] || { count: 0, lastAttempt: Date.now() };
 
-      // Check if locked
+      // 2. Verificação de bloqueio temporário por força bruta (Rate limit 5 tentativas / 15 minutos)
       if (attemptData.lockedUntil && Date.now() < attemptData.lockedUntil) {
         const remainingMinutes = Math.ceil((attemptData.lockedUntil - Date.now()) / (60 * 1000));
         return res.status(429).json({
-          error: `Acesso bloqueado por segurança devido a 5 tentativas falhas. Tente novamente em ${remainingMinutes} minutos.`,
+          error: `Acesso bloqueado por segurança devido a excesso de tentativas incorretas. Tente novamente em ${remainingMinutes} minutos.`,
           locked: true,
           remainingMinutes,
         });
       }
 
-      // If attempts >= 3, require captcha
+      // 3. Verificação de Captcha a partir da 3ª tentativa
       if (attemptData.count >= 3) {
         if (!captchaId || !captchaAnswer) {
           return res.status(400).json({
@@ -1032,21 +1052,17 @@ async function startServer() {
         const storedCaptcha = db.captchas ? db.captchas[captchaId] : null;
         if (!storedCaptcha || storedCaptcha.expires < Date.now() || storedCaptcha.answer !== String(captchaAnswer).trim()) {
           return res.status(400).json({
-            error: 'Resposta de segurança incorreta. Tente novamente.',
+            error: 'Resposta de segurança (Captcha) incorreta ou expirada. Tente novamente.',
             requireCaptcha: true,
           });
         }
         delete db.captchas[captchaId];
       }
 
-      const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
-      let isValidPassword = false;
+      // 4. Consulta ao banco de dados para encontrar o usuário
+      const user = db.users.find((u) => u.email && u.email.toLowerCase().trim() === cleanEmail);
 
-      if (user && user.passwordHash) {
-        isValidPassword = bcrypt.compareSync(password, user.passwordHash);
-      }
-
-      if (!user || !isValidPassword) {
+      if (!user) {
         attemptData.count += 1;
         attemptData.lastAttempt = Date.now();
 
@@ -1057,7 +1073,66 @@ async function startServer() {
 
           logAudit(
             db,
-            { id: user?.id || 'tentativa_falha', name: cleanEmail, email: cleanEmail },
+            { id: 'tentativa_falha', name: cleanEmail, email: cleanEmail },
+            'LOGIN_BLOQUEADO',
+            'Bloqueio automático de 15 minutos acionado após 5 tentativas falhas de login',
+            req,
+            'Alto'
+          );
+
+          return res.status(429).json({
+            error: 'Você atingiu o limite de 5 tentativas. O acesso foi bloqueado temporariamente por 15 minutos.',
+            locked: true,
+            remainingMinutes: 15,
+          });
+        }
+
+        db.loginAttempts[attemptKey] = attemptData;
+        saveDB(db);
+
+        const remainingAttempts = 5 - attemptData.count;
+        return res.status(400).json({
+          error: `Usuário não encontrado com o e-mail "${cleanEmail}". Verifique os dados digitados ou realize seu cadastro.`,
+          attemptsCount: attemptData.count,
+          remainingAttempts,
+          requireCaptcha: attemptData.count >= 3,
+        });
+      }
+
+      // 5. Verificação de status da conta do usuário
+      if (user.status === 'inactive' || user.status === 'blocked') {
+        return res.status(403).json({
+          error: 'Esta conta de usuário está desativada ou bloqueada. Entre em contato com o administrador.',
+        });
+      }
+
+      // 6. Comparação da senha com o hash armazenado (bcrypt)
+      if (!user.passwordHash) {
+        return res.status(400).json({
+          error: 'Credenciais inválidas. Nenhuma senha cadastrada para esta conta.',
+        });
+      }
+
+      let isValidPassword = false;
+      try {
+        isValidPassword = bcrypt.compareSync(password, user.passwordHash);
+      } catch (bcryptErr) {
+        console.error('[Stay Pro Auth] Erro ao comparar hash bcrypt:', bcryptErr);
+        isValidPassword = false;
+      }
+
+      if (!isValidPassword) {
+        attemptData.count += 1;
+        attemptData.lastAttempt = Date.now();
+
+        if (attemptData.count >= 5) {
+          attemptData.lockedUntil = Date.now() + 15 * 60 * 1000; // 15 min lockout
+          db.loginAttempts[attemptKey] = attemptData;
+          saveDB(db);
+
+          logAudit(
+            db,
+            user,
             'LOGIN_BLOQUEADO',
             'Bloqueio automático de 15 minutos acionado após 5 tentativas de senha incorreta',
             req,
@@ -1074,15 +1149,25 @@ async function startServer() {
         db.loginAttempts[attemptKey] = attemptData;
         saveDB(db);
 
+        logAudit(
+          db,
+          user,
+          'LOGIN_FALHA',
+          `Tentativa com senha incorreta (${attemptData.count}/5)`,
+          req,
+          'Médio'
+        );
+
         const remainingAttempts = 5 - attemptData.count;
         return res.status(400).json({
-          error: `E-mail ou senha incorretos. Tentativa ${attemptData.count} de 5 (${remainingAttempts} restantes antes do bloqueio).`,
+          error: `Credenciais inválidas. A senha digitada está incorreta. (${remainingAttempts} tentativa(s) restante(s) antes do bloqueio).`,
           attemptsCount: attemptData.count,
+          remainingAttempts,
           requireCaptcha: attemptData.count >= 3,
         });
       }
 
-      // Check 2FA if enabled on user account
+      // 7. Verificação de 2FA se habilitado na conta do usuário
       if (user.twoFactor?.enabled) {
         if (!twoFactorCode) {
           return res.json({
@@ -1094,17 +1179,17 @@ async function startServer() {
         const cleanCode = twoFactorCode.trim().toUpperCase();
         let is2FaValid = false;
 
-        // Check TOTP code
+        // Verifica código TOTP dinâmico
         if (user.twoFactor.secret && verifyTOTP(user.twoFactor.secret, cleanCode)) {
           is2FaValid = true;
         }
 
-        // Check single-use backup codes
+        // Verifica códigos de backup de uso único
         if (!is2FaValid && Array.isArray(user.twoFactor.backupCodes)) {
           const codeIndex = user.twoFactor.backupCodes.findIndex((c: string) => c.toUpperCase() === cleanCode);
           if (codeIndex !== -1) {
             is2FaValid = true;
-            user.twoFactor.backupCodes.splice(codeIndex, 1); // Consume single-use backup code
+            user.twoFactor.backupCodes.splice(codeIndex, 1); // Consome o código usado
             user.updatedAt = new Date().toISOString();
             logAudit(
               db,
@@ -1126,11 +1211,14 @@ async function startServer() {
             req,
             'Médio'
           );
-          return res.status(400).json({ error: 'Código de autenticação em 2 etapas inválido ou expirado.' });
+          return res.status(400).json({
+            error: 'Código de autenticação em 2 etapas inválido ou expirado.',
+            require2FA: true,
+          });
         }
       }
 
-      // Reset login attempts on success
+      // 8. Sucesso na autenticação: zera tentativas e emite tokens
       delete db.loginAttempts[attemptKey];
       saveDB(db);
 
@@ -1158,7 +1246,7 @@ async function startServer() {
       });
     } catch (err: any) {
       console.error('Login error:', err);
-      return res.status(500).json({ error: 'Erro ao autenticar usuário.' });
+      return res.status(500).json({ error: 'Erro interno ao autenticar usuário.' });
     }
   });
 
@@ -2894,6 +2982,46 @@ async function startServer() {
   // ----------------------------------------------------
   // SYSTEM ROUTE: FIRESTORE STATUS & MANUAL SYNC
   // ----------------------------------------------------
+  app.get('/api/system/firestore-status', async (req, res) => {
+    try {
+      const config = loadFirebaseConfig();
+      const dbFirestore = getFirestoreDB();
+      const connected = Boolean(dbFirestore);
+
+      let collectionsCount: any = { users: 0, propriedades: 0, reservas: 0, logs: 0 };
+      if (connected) {
+        const [users, props, reservas, logs] = await Promise.all([
+          loadCollectionFromFirestore('users'),
+          loadCollectionFromFirestore('propriedades'),
+          loadCollectionFromFirestore('reservas'),
+          loadCollectionFromFirestore('logs'),
+        ]);
+        collectionsCount = {
+          users: users.length,
+          propriedades: props.length,
+          reservas: reservas.length,
+          logs: logs.length,
+        };
+      }
+
+      res.json({
+        status: connected ? 'connected' : 'error',
+        databaseId: config?.firestoreDatabaseId || DEFAULT_FIRESTORE_DATABASE_ID,
+        expectedDatabaseId: DEFAULT_FIRESTORE_DATABASE_ID,
+        projectId: config?.projectId || 'project-6d7775f6-2fcd-4966-b77',
+        isAligned: (config?.firestoreDatabaseId || DEFAULT_FIRESTORE_DATABASE_ID) === DEFAULT_FIRESTORE_DATABASE_ID,
+        collections: collectionsCount,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        status: 'error',
+        error: err.message,
+        databaseId: DEFAULT_FIRESTORE_DATABASE_ID,
+      });
+    }
+  });
+
   app.post('/api/system/sync-firestore', requireAuth, async (req, res) => {
     const user = (req as any).user;
     if (user.role !== 'admin') {
